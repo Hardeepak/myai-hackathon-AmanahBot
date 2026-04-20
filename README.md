@@ -5,84 +5,114 @@
 ---
 
 ## 📌 Project Overview
-Instead of forcing users to download a new application, Amanah-Bot acts as a decentralized API and web-widget. Sellers generate a "Secure Checkout Link" (e.g., `amanah.bot/pay/item123`) and send it to buyers via WhatsApp, Telegram, or Instagram. The system autonomously holds funds, tracks shipments, and resolves disputes using advanced AI agents.
+Amanah-Bot elevates escrow from a standalone app to a scalable **B2B2C infrastructure**. It acts as a decentralized API and web-widget that individual sellers or platforms (like Mudah.my) can generate as a simple "Secure Checkout Link." It holds funds securely and uses AI agents to autonomously track courier statuses, verify payment receipts, and resolve disputes without human moderation.
 
 ### 🇲🇾 Problem Statement (Malaysia Context)
-*   **E-commerce Fraud:** High concentration of scams on platforms lacking native checkout security (Facebook Marketplace, Instagram, etc.).
-*   **Fake Receipt Scams:** Sellers are frequently defrauded by digitally manipulated DuitNow or bank transfer receipts.
-*   **Zero Trust:** Micro-transactions (RM50–RM200) lack affordable and fast escrow solutions.
+*   **Leading Category of Cybercrime:** E-commerce fraud is concentrated on platforms lacking native checkout security (Facebook Marketplace, Telegram, Instagram).
+*   **Non-Delivery Scams:** Buyers send money and are immediately blocked by unverified sellers.
+*   **Fake Payment Scams:** Sellers are defrauded by digitally manipulated DuitNow or bank transfer receipts.
+*   **Friction:** Traditional escrow is slow and expensive for RM50–RM200 micro-transactions.
+
+### 😫 Customer Pains
+*   **Zero Trust:** Strangers cannot transact safely online without a trusted middleman.
+*   **Complexity:** Traditional escrow requires complex account setups, deterring impulse buys.
+*   **Slow Disputes:** Manual moderation by platform admins can take weeks.
 
 ---
 
 ## ⚙️ How It Works (The Agentic Workflow)
-1.  **The Secure Link:** A seller generates an Amanah-Bot link and sends it to the buyer.
-2.  **Multimodal Receipt Verification (Agent 1):** The buyer uploads their transfer receipt. Gemini 1.5 Pro analyzes the image for pixel manipulation and cross-references a simulated bank API.
-3.  **Autonomous Tracking (Agent 2):** Once funded, Firebase Genkit triggers a background loop polling a simulated courier API (PosLaju/J&T).
+1.  **The Plug-and-Play Link:** Seller generates a link and sends it to the buyer via WhatsApp.
+2.  **Multimodal Receipt Verification (Agent 1):** Gemini 1.5 Pro analyzes the buyer's receipt for pixel manipulation and font inconsistencies.
+3.  **Autonomous Tracking (Agent 2):** Firebase Genkit triggers a loop polling a simulated courier API (PosLaju/J&T) based on the tracking number.
 4.  **Autonomous Execution:** The millisecond the courier returns "Delivered," Genkit unlocks the vault and routes funds to the seller.
-5.  **AI Mediator (Agent 3):** If a dispute is raised, Gemini analyzes chat logs and photo evidence to make an unbiased refund decision based on consumer protection laws.
+5.  **AI Mediator (Agent 3):** If "Dispute" is clicked, Gemini analyzes chat logs and photo evidence to make an unbiased refund decision based on consumer protection laws.
+
+---
+
+## ✨ Core Features
+*   **Link-Based Checkout:** Runs entirely via a responsive Flutter Web portal; no app download required.
+*   **Zero-Day Receipt Forensics:** Kills fake DuitNow receipt scams using multimodal AI.
+*   **Machine-Speed Escrow Release:** Triggers automatically off courier API webhooks.
+*   **Unbiased AI Arbitration:** Settles disputes in seconds based on photographic context.
 
 ---
 
 ## 🛠 Tech Stack
-*   **Frontend:** **Flutter Web** (Highly responsive, zero-download requirement).
-*   **Orchestration:** **Firebase Genkit** (Manages the state machine and autonomous polling).
-*   **Intelligence:** **Gemini 1.5 Pro API** (Multimodal receipt forensics & NLP Dispute Resolution).
+*   **Frontend:** **Flutter Web** (UI/UX excellence and web accessibility).
+*   **Orchestration:** **Firebase Genkit** (The brain managing state transitions).
+*   **Intelligence:** **Gemini 1.5 Pro API** (Multimodal forensics & NLP arbitration).
 *   **Backend:** **FastAPI (Python)** (Mock Bank and Courier APIs).
-*   **Infrastructure:** **Google Cloud Run** (Containerized hosting with unauthenticated public access).
+*   **Deployment:** **Google Cloud Run** (Mandatory hackathon requirement).
 
 ---
 
 ## 📐 Architecture Overview
-*   **Decentralized Access:** Web-accessible via checkout links.
-*   **Stateless Execution:** State managed via Genkit transitions (Pending → Funded → In-Transit → Released/Disputed).
-*   **Security:** Environment-based secret management; no hardcoded API keys.
+*   **Decentralized API/Widget:** Easily integrated into existing social commerce workflows.
+*   **State Machine:** Managed via Genkit (Pending → Funded → In-Transit → Released/Disputed).
+*   **Zero-Trust Security:** Mandatory environment secret management (GCP Secret Manager).
+
+---
+
+## 💰 Business Model
+*   **Freemium (B2C):** Free for transactions under RM50.
+*   **Micro-Fee:** Amanah-Bot charges a 1.5% fee for transactions over RM50, acting as an "insurance premium" for guaranteed safe commerce.
 
 ---
 
 ## 🚀 24-Hour Execution Phases
-1.  **Phase 1: Security & Foundation (H1-4):** Repo setup, `.gitignore`, and Mock API initialization.
-2.  **Phase 2: Genkit & Gemini Integration (H4-10):** Prompt engineering and agentic state machine configuration.
-3.  **Phase 3: Flutter Web UI (H10-16):** Building the "Plug-and-Play" checkout and seller dashboard.
-4.  **Phase 4: Deployment (H16-18):** Dockerization and push to Google Cloud Run.
-5.  **Phase 5: Polish & Pitch (H18-24):** Demo video recording, pitch deck finalization, and submission.
+1.  **Phase 1: Architecture & Mocking (H1-4):** Repo setup, `.gitignore`, and Mock API development.
+2.  **Phase 2: Genkit & Gemini Integration (H4-10):** Prompt engineering and agentic loop configuration.
+3.  **Phase 3: Flutter Web UI (H10-16):** Building the checkout link screen and seller dashboard.
+4.  **Phase 4: Deployment (H16-18):** Dockerization and Google Cloud Run push.
+5.  **Phase 5: Polish & Pitch (H18-24):** Demo video, 15-slide deck, and final submission.
 
 ---
 
 ## 📋 Role-Based Task Checklist
 
-### **Frontend Architect (Flutter Web)**
-- [ ] Build responsive "Secure Checkout Link" UI.
-- [ ] Create Seller Dashboard for link generation and escrow tracking.
-- [ ] Implement Dispute Resolution UI for evidence upload.
-- [ ] Connect UI to Genkit/FastAPI endpoints.
+### **Role 1: Frontend Architect (Flutter Web)**
+- [ ] **UI Skeleton:** Build responsive web UI with clean UX.
+- [ ] **Checkout Link Screen:** Implement FileUpload for receipts and status indicators.
+- [ ] **Seller Dashboard:** Create interface for link generation and escrow tracking.
+- [ ] **Integration:** Connect Flutter app to live Cloud Run API URLs.
 
-### **Agentic Workflow & Security Lead (Genkit + Gemini)**
-- [ ] Configure Gemini 1.5 Pro Multimodal prompt for receipt forensics.
-- [ ] Set up Firebase Genkit state transitions for autonomous polling.
-- [ ] Engineer the NLP AI Mediator for dispute arbitration.
-- [ ] Conduct final security audit on AI decision-making logic.
+### **Role 2: Agentic Workflow & Security Lead (Genkit + Gemini)**
+- [ ] **Receipt Forensics:** Engineer Multimodal prompts for receipt verification.
+- [ ] **Genkit Orchestration:** Manage state transitions (Funded → Released).
+- [ ] **AI Mediator:** Build the NLP prompt for autonomous dispute resolution.
+- [ ] **Autonomous Action:** Ensure the AI is executing vault releases without human input.
 
-### **Backend & Cloud Engineer (FastAPI + Cloud Run)**
-- [x] Initialize Repository & Security Foundation (`.gitignore`).
-- [x] Build Mock Bank & Courier APIs (Dynamic status via Tracking #).
-- [ ] Dockerize application using slim Python images.
-- [ ] Deploy services to Google Cloud Run (Public/Unauthenticated).
-- [ ] Document setup steps and API endpoints.
+### **Role 3: Backend & Cloud Engineer (FastAPI + Cloud Run)**
+- [x] **Security Setup:** Initialize GitHub and `.gitignore` (No hardcoded keys).
+- [x] **Mock Bank API:** `POST /api/bank/verify` returning hardcoded success.
+- [x] **Mock Courier API:** `GET /api/courier/track/{tracking_number}` with dynamic status logic.
+- [ ] **Dockerization:** Create `Dockerfile` (Slim Python 3.10) binding to `$PORT`.
+- [ ] **Cloud Run Deployment:** Build/Push via Cloud Build; Allow unauthenticated invocations.
+- [ ] **Env Management:** Securely inject API keys into Cloud Run "Variables & Secrets."
 
-### **Project Manager & Pitch Strategist**
-- [ ] Register team via Google Form (Deadline: April 20, 11:59 PM).
-- [ ] Draft 15-slide Pitch Deck (Focus: National Impact & Business Model).
-- [ ] Script and edit 3-minute Video Demo.
-- [ ] Handle final submission portal logic.
+### **Role 4: Product Manager & Pitch Strategist**
+- [ ] **Team Registration:** Register via Google Form by **TONIGHT 11:59 PM (April 20)**.
+- [ ] **Pitch Deck (15 Slides):** Heavy focus on business model and national impact.
+- [ ] **Video Demo (3-Min):** Record screen showing Link → Payment → Auto-Release flow.
+- [ ] **Final Submission:** Submit GitHub, Video, Deck, and Cloud Run URL by **April 21 11:59 PM**.
+
+---
+
+## ✅ Mandatory Submission Checklist
+- [ ] **Cloud Run URL:** Publicly accessible without login.
+- [ ] **GitHub Repo:** Public with source code and setup instructions.
+- [ ] **AI Declaration:** Explicitly included in README (See below).
+- [ ] **Video Demo:** 3-minute max on YouTube/Drive.
+- [ ] **Pitch Deck:** 15-slide PDF.
 
 ---
 
 ## 📝 AI Declaration
-This project utilizes **Gemini CLI** and **Google AI Studio (Gemini 1.5 Pro)** to assist in code generation, architectural planning, and documentation. All AI-generated components have been reviewed and validated by the team leads.
+This project explicitly utilizes **Gemini CLI**, **GitHub Copilot**, and **Gemini 1.5 Pro** for architectural design, code generation, and rapid documentation. All AI-generated code has been reviewed for security and technical integrity.
 
 ---
 
 ## 🛠 Setup & Local Development
-1. Clone the repo: `git clone https://github.com/Nitezio/myai-hackathon-AmanahBot`
+1. `git clone https://github.com/Nitezio/myai-hackathon-AmanahBot`
 2. Backend: `pip install -r requirements.txt` -> `uvicorn main:app --port 8080`
 3. Frontend: `flutter pub get` -> `flutter run -d chrome`
