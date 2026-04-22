@@ -58,6 +58,8 @@ export const receiptForensicsFlow = ai.defineFlow(
     outputSchema: z.object({
       is_authentic: z.boolean(),
       confidence_score: z.number(),
+      pixel_anomaly_detected: z.boolean().describe("True if blurring or noise is found around key text"),
+      font_mismatch_detected: z.boolean().describe("True if font weights or styles are inconsistent"),
       fraud_indicators: z.array(z.string()),
       reasoning: z.string()
     }),
@@ -66,12 +68,14 @@ export const receiptForensicsFlow = ai.defineFlow(
     console.log(`[AGENT RUNNING] Analyzing receipt for RM${input.expectedAmount}...`);
 
     const response = await ai.generate({
-      model: googleAI.model('gemini-2.5-flash-lite'), // <-- FIXED SYNTAX
+      model: googleAI.model('gemini-2.0-flash'), // Using 2.0 Flash as standard
       output: {
         format: 'json',
         schema: z.object({
           is_authentic: z.boolean(),
           confidence_score: z.number(),
+          pixel_anomaly_detected: z.boolean(),
+          font_mismatch_detected: z.boolean(),
           fraud_indicators: z.array(z.string()),
           reasoning: z.string()
         })

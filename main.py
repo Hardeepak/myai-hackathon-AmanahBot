@@ -1,18 +1,31 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import httpx
 import ai_agents
 import escrow_manager
 import uuid
 
 app = FastAPI(title="Amanah-Bot EaaS Backend")
 
-# ... CORS ...
+# Genkit Node.js Server URL
+GENKIT_URL = os.environ.get("GENKIT_URL", "http://localhost:3400")
+
+@app.get("/")
+async def root():
+    """Returns a basic greeting for the EaaS Backend."""
+    return {"message": "Amanah-Bot EaaS Backend is running."}
+
+@app.get("/health")
+async def health_check():
+    """Health check for Cloud Run monitoring."""
+    return {"status": "ok"}
 
 @app.post("/api/escrow/create")
 async def create_escrow(item_name: str, price: float, tracking_number: str):
     """
-    Sellers use this to generate a new escrow link/ID.
+    Initializes a new escrow session. 
+    Returns a unique escrow_id for the frontend to use.
     """
     escrow_id = str(uuid.uuid4())[:8]
     escrow_manager.escrow_db[escrow_id] = {
@@ -27,7 +40,8 @@ async def create_escrow(item_name: str, price: float, tracking_number: str):
 @app.post("/api/escrow/upload-receipt/{escrow_id}")
 async def upload_receipt(escrow_id: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
-    Buyers upload receipts to an existing escrow.
+    Accepts a receipt image and routes it to the Genkit V1 Node.js server
+    for forensic multimodal analysis.
     """
     if escrow_id not in escrow_manager.escrow_db:
         raise HTTPException(status_code=404, detail="Escrow session not found.")
@@ -36,14 +50,27 @@ async def upload_receipt(escrow_id: str, background_tasks: BackgroundTasks, file
         raise HTTPException(status_code=400, detail="Only image files are supported.")
     
     contents = await file.read()
-    analysis = await ai_agents.analyze_receipt(contents)
+    import base64
+    base64_image = f"data:{file.content_type};base64,{base64.b64encode(contents).decode('utf-8')}"
     
-    if "error" in analysis:
-        return {"status": "AI_OFFLINE", "message": "Analysis skipped.", "debug": analysis}
+    # CALL GENKIT NODE.JS SERVER (The Bridge)
+    try:
+        async with httpx.AsyncClient() as client:
+            genkit_resp = await client.post(
+                f"{GENKIT_URL}/analyzeReceipt",
+                json={
+                    "data": {
+                        "expectedAmount": str(escrow_manager.escrow_db[escrow_id]["price"]),
+                        "receiptImageBase64": base64_image
+                    }
+                }
+            )
+            analysis = genkit_resp.json().get("result", {})
+    except Exception as e:
+        return {"status": "BRIDGE_ERROR", "message": f"Could not reach AI Server: {str(e)}"}
 
-    # Integrate logic: If AI + Bank verify, set to FUNDED and START POLLING
-    is_valid = analysis.get("is_authentic")
-    if is_valid:
+    # Autonomous Logic: If AI confirms authenticity, set to FUNDED and START POLLING
+    if analysis.get("is_authentic"):
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.FUNDED)
         
         # AGENTIC TRIGGER: Start background polling for delivery
@@ -58,6 +85,7 @@ async def upload_receipt(escrow_id: str, background_tasks: BackgroundTasks, file
 
 @app.get("/api/escrow/status/{escrow_id}")
 async def get_status(escrow_id: str):
+    """Returns the current real-time state of an escrow session."""
     if escrow_id not in escrow_manager.escrow_db:
         raise HTTPException(status_code=404, detail="Escrow not found.")
     return escrow_manager.escrow_db[escrow_id]

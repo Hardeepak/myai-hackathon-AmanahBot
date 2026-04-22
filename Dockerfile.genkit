@@ -1,0 +1,23 @@
+# Use an official Node runtime as a parent image
+FROM node:20-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Expose the port (Genkit flow server defaults to 3400)
+EXPOSE 3400
+
+# Set environment variables
+ENV NODE_ENV=production
+
+# Use tsx to run the TypeScript file directly in production
+CMD ["npx", "tsx", "src/index.ts"]
