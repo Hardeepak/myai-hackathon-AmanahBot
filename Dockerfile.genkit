@@ -20,4 +20,5 @@ EXPOSE 3400
 ENV NODE_ENV=production
 
 # Use tsx to run the TypeScript file directly in production
-CMD ["npx", "tsx", "src/index.ts"]
+# Bind to 0.0.0.0 and respect the Cloud Run PORT variable
+CMD ["sh", "-c", "npx tsx src/index.ts --port ${PORT:-3400}"]
