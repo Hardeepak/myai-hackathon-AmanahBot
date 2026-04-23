@@ -34,7 +34,7 @@ As per the **Project 2030 MyAI Future Hackathon** mandates, this project utilize
 4.  **Agentic Polling:** Non-blocking background loops that autonomously monitor PosLaju/J&T status.
 5.  **Zero-Trust Vault:** Automated fund release triggered ONLY by delivery confirmation AND verified AI forensics.
 6.  **AI Mediator:** Unbiased NLP arbitrator for rapid dispute resolution using Malaysian consumer law context.
-7.  **Structured Observability:** Professional JSON logging of every agentic decision.
+7.  **Agentic UI:** A state-managed Flutter dashboard that displays the AI's **forensic reasoning** in real-time.
 
 ---
 
@@ -59,67 +59,68 @@ As per the **Project 2030 MyAI Future Hackathon** mandates, this project utilize
 ### **1. Project Manager & Pitch Strategist**
 *   **[ ] Task 1.1: Official Registration (URGENT)**
     *   Submit the Google Form by **Tonight 11:59 PM**.
-    *   Ensure all team member GitHub profiles are correctly linked.
 *   **[ ] Task 1.2: 15-Slide Pitch Deck (PDF)**
-    *   **The Problem:** Focus on RM50-200 social commerce fraud in Malaysia.
-    *   **The Pivot:** Explain "Escrow-as-a-Service" (EaaS) as a plug-and-play widget.
-    *   **The Business Model:** Detail the 1.5% micro-fee revenue structure.
-    *   **National Impact:** Align with Malaysia Madani / MyDIGITAL blueprints.
+    *   **Goal:** Focus on EaaS model, 1.5% micro-fee, and Agentic autonomy.
 *   **[ ] Task 1.3: 3-Minute Video Demo**
-    *   Script a flow: Link Generation $\rightarrow$ AI Receipt Check $\rightarrow$ Agentic Polling $\rightarrow$ Auto-Release.
-    *   Record a clean walkthrough of the working prototype.
+    *   **Goal:** Demonstrate the "Zero-Trust" flow from Link Gen to Auto-Release.
 *   **[ ] Task 1.4: Final Portal Submission**
     *   Finalize: GitHub URL, Cloud Run URL, Video Link, and Deck PDF.
 
 ---
 
 ### **2. Frontend Architect (Flutter Web)**
-*   **[ ] Task 2.1: Flutter Web Initialization**
-    *   Create a responsive project optimized for mobile browsers (WhatsApp/Instagram).
-*   **[ ] Task 2.2: The "Secure Checkout" Screen (`/pay/{id}`)**
-    *   Build a sleek UI for item details and a FileUpload widget for receipts.
-    *   **The "Wow" Feature:** Create a status bar that displays the AI's "Reasoning" string in real-time.
-*   **[ ] Task 2.3: Seller dashboard**
-    *   Simple interface to input item details and generate shareable escrow links.
-*   **[ ] Task 2.4: Dispute Resolution Interface**
-    *   UI for evidence upload and viewing the "AI Mediator" final verdict.
-*   **[ ] Task 2.5: Backend Integration**
-    *   Connect the UI to the Python Gateway (Port 8080) using the `API_HANDOFF.md` specifications.
+*   **[x] Task 2.1: Flutter Web Initialization** (Mobile-optimized layout established).
+*   **[x] Task 2.2: Checkout Screen (`/pay/{id}`)** (Implemented FileUpload and AI Reasoning Bar).
+*   **[x] Task 2.3: Seller Dashboard** (Fully functional escrow link generator).
+*   **[x] Task 2.4: Dispute Interface** (Integrated with AI Mediator backend).
+*   **[x] Task 2.5: Backend Integration** (Connected to Python Gateway via `ApiService`).
 
 ---
 
 ### **3. Backend & Cloud Lead**
 *   **[x] Task 3.1: Hybrid Engine Bridge** (Verified Python ↔ Node.js communication).
-*   **[x] Task 3.2: Multi-Service Containerization** (Both Dockerfiles ready and hardened).
+*   **[x] Task 3.2: Multi-Service Containerization** (Both Dockerfiles ready).
 *   **[x] Task 3.3: Deployment Automation** (Created `deploy_to_gcp.sh`).
-*   **[x] Task 3.4: Code Polish & Type Safety** (Added Pydantic models and full docstrings).
+*   **[x] Task 3.4: Code Polish & Type Safety** (Pydantic models and full docstrings).
 *   **[x] Task 3.5: API Documentation** (Created `API_HANDOFF.md`).
 *   **[ ] Task 3.6: Cloud Run Deployment (BLOCKER: Credits)**
     *   Deploy both services to GCP once credits are redeemed.
-    *   Provision `GEMINI_API_KEY` in **GCP Secret Manager** (Mandatory for security marks).
-*   **[ ] Task 3.7: Cross-Service Cloud Link**
-    *   Update the Python service `GENKIT_URL` with the live Cloud Run URL of the AI server.
 
 ---
 
 ### **4. Agentic Workflow & Security Lead**
-*   **[x] Task 4.1: Multimodal Forensic Flows** (Gemini 2.5 Flash Lite receipt checks).
-*   **[x] Task 4.2: NLP Dispute Mediator** (Unbiased legal arbitration flow).
-*   **[x] Task 4.3: Zero-Trust Guardrails** (Double-condition payout: AI Verified + Delivered).
-*   **[x] Task 4.4: Prompt Injection Lockdown** (Hardened system mandates).
+*   **[x] Task 4.1: Multimodal Forensic Flows** (Gemini 2.5 Flash Lite receipt check).
+*   **[x] Task 4.2: NLP Dispute Mediator** (Unbiased legal arbitration).
+*   **[x] Task 4.3: Zero-Trust Guardrails** (AI Verified + Delivered condition).
+*   **[x] Task 4.4: Prompt Injection Lockdown** (Hardened mandates).
 *   **[x] Task 4.5: Reasoning & Audit Logs** (AI now outputs step-by-step thinking).
 *   **[x] Task 4.6: Autonomous Proof Run** (Captured logs of the agent acting alone).
-*   **[x] Task 4.7: Intelligent Thresholds**
-    *   **Action:** Final logic update to auto-dispute transactions where AI confidence is `< 85%`.
+*   **[x] Task 4.7: Intelligent Thresholds** (Auto-dispute logic enforced at 85%).
 
 ---
 
 ## 🛠 Setup & Local Development
-1. Clone the repo and install dependencies (`npm install`, `pip install -r requirements.txt`).
-2. Set Gemini Key: `$env:GEMINI_API_KEY="your_key"`
-3. Start Node.js: `npx tsx src/index.ts` (Port 3400)
-4. Start Python: `python main.py` (Port 8080)
-5. Refer to `API_HANDOFF.md` for endpoint specifications.
+
+### 1. AI Engine (Node.js)
+```bash
+cd myai-hackathon-AmanahBot
+npm install
+npx tsx src/index.ts  # Port 3400
+```
+
+### 2. Gateway (Python)
+```bash
+# In new terminal
+pip install -r requirements.txt
+python main.py  # Port 8080
+```
+
+### 3. Frontend (Flutter)
+```bash
+cd myai-hackathon-AmanahBot/amanah_ui
+flutter pub get
+flutter run -d chrome --dart-define=API_URL=http://localhost:8080
+```
 
 ---
 
