@@ -30,18 +30,20 @@ As per the **Project 2030 MyAI Future Hackathon** mandates, this project utilize
 ## ✨ Core Features (Verified)
 1.  **Hybrid AI Hub:** A bridged dual-engine (FastAPI + Genkit V1) that isolates AI reasoning.
 2.  **Multimodal Forensics:** Deep visual analysis of receipt pixels and fonts to catch manipulated screenshots.
-3.  **Agentic Polling:** Non-blocking background loops that autonomously monitor PosLaju/J&T status.
-4.  **Zero-Trust Vault:** Automated fund release triggered ONLY by delivery confirmation AND verified AI forensics.
-5.  **AI Mediator:** Unbiased NLP arbitrator for rapid dispute resolution using Malaysian consumer law context.
-6.  **Structured Observability:** Professional JSON logging of every agentic decision.
+3.  **Digital Fingerprinting:** Generates unique **SHA-256 hashes** for every uploaded receipt to prevent duplicate submission fraud.
+4.  **Agentic Polling:** Non-blocking background loops that autonomously monitor PosLaju/J&T status.
+5.  **Zero-Trust Vault:** Automated fund release triggered ONLY by delivery confirmation AND verified AI forensics.
+6.  **AI Mediator:** Unbiased NLP arbitrator for rapid dispute resolution using Malaysian consumer law context.
+7.  **Structured Observability:** Professional JSON logging of every agentic decision.
 
 ---
 
-## 📐 Technical Architecture
-*   **Gateway (Python/FastAPI):** Manages escrow state, mocks, and background tasks.
-*   **AI Engine (Node.js/Genkit):** Executes complex multimodal flows for receipt checking and dispute mediation.
-*   **Bridging:** Secure internal Base64 data bridging between services.
-*   **Deployment:** 100% Cloud-Native; Dockerized for Google Cloud Run.
+## 📐 Technical Architecture & Data Flow
+*   **Gateway (Python/FastAPI):** Manages the primary escrow state machine and serves the API for the Flutter Frontend.
+*   **AI Engine (Node.js/Genkit):** Executes complex multimodal reasoning using **Gemini 2.5 Flash Lite**.
+*   **Data Bridge:** Binary image data is captured by the Gateway, converted to **Base64**, and bridged to the AI Engine.
+*   **Internal Security:** The AI Engine performs a SHA-256 pre-check and enforces an **85% confidence threshold** before permitting the Gateway to update the escrow state.
+*   **Deployment:** Dockerized for multi-container orchestration on Google Cloud Run.
 
 ---
 
