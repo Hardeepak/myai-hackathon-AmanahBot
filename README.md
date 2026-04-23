@@ -55,28 +55,60 @@ As per the **Project 2030 MyAI Future Hackathon** mandates, this project utilize
 ## 📋 Official Master Team Checklist
 
 ### **1. Project Manager & Pitch Strategist**
-*   **[ ] Task 1.1: Official Registration (URGENT)** (Submit Google Form by Tonight 11:59 PM).
-*   **[ ] Task 1.2: 15-Slide Pitch Deck (PDF)** (Focus on EaaS model and National Impact).
-*   **[ ] Task 1.3: 3-Minute Video Demo** (Record flow: Link → AI Check → Auto-Release).
-*   **[ ] Task 1.4: Final Portal Submission** (Finalize all 4 URLs/Links).
+*   **[ ] Task 1.1: Official Registration (URGENT)**
+    *   Submit the Google Form by **Tonight 11:59 PM**.
+    *   Ensure all team member GitHub profiles are correctly linked.
+*   **[ ] Task 1.2: 15-Slide Pitch Deck (PDF)**
+    *   **The Problem:** Focus on RM50-200 social commerce fraud in Malaysia.
+    *   **The Pivot:** Explain "Escrow-as-a-Service" (EaaS) as a plug-and-play widget.
+    *   **The Business Model:** Detail the 1.5% micro-fee revenue structure.
+    *   **National Impact:** Align with Malaysia Madani / MyDIGITAL blueprints.
+*   **[ ] Task 1.3: 3-Minute Video Demo**
+    *   Script a flow: Link Generation $\rightarrow$ AI Receipt Check $\rightarrow$ Agentic Polling $\rightarrow$ Auto-Release.
+    *   Record a clean walkthrough of the working prototype.
+*   **[ ] Task 1.4: Final Portal Submission**
+    *   Finalize: GitHub URL, Cloud Run URL, Video Link, and Deck PDF.
+
+---
 
 ### **2. Frontend Architect (Flutter Web)**
-*   **[ ] Task 2.1: Flutter Web Initialization** (Mobile-optimized layout setup).
-*   **[ ] Task 2.2: Checkout Screen (`/pay/{id}`)** (FileUpload and AI Reasoning Bar).
-*   **[ ] Task 2.3: Seller Dashboard** (Link Generator and Escrow Monitor).
-*   **[ ] Task 2.4: Backend Integration** (Connect to Ports 8080 and 3400).
+*   **[ ] Task 2.1: Flutter Web Initialization**
+    *   Create a responsive project optimized for mobile browsers (WhatsApp/Instagram).
+*   **[ ] Task 2.2: The "Secure Checkout" Screen (`/pay/{id}`)**
+    *   Build a sleek UI for item details and a FileUpload widget for receipts.
+    *   **The "Wow" Feature:** Create a status bar that displays the AI's "Reasoning" string in real-time.
+*   **[ ] Task 2.3: Seller dashboard**
+    *   Simple interface to input item details and generate shareable escrow links.
+*   **[ ] Task 2.4: Dispute Resolution Interface**
+    *   UI for evidence upload and viewing the "AI Mediator" final verdict.
+*   **[ ] Task 2.5: Backend Integration**
+    *   Connect the UI to the Python Gateway (Port 8080) using the `API_HANDOFF.md` specifications.
+
+---
 
 ### **3. Backend & Cloud Lead**
 *   **[x] Task 3.1: Hybrid Engine Bridge** (Verified Python ↔ Node.js communication).
-*   **[x] Task 3.2: Multi-Service Containerization** (Both Dockerfiles ready).
+*   **[x] Task 3.2: Multi-Service Containerization** (Both Dockerfiles ready and hardened).
 *   **[x] Task 3.3: Deployment Automation** (Created `deploy_to_gcp.sh`).
-*   **[x] Task 3.4: Code Polish & Type Safety** (Pydantic models and full docstrings).
+*   **[x] Task 3.4: Code Polish & Type Safety** (Added Pydantic models and full docstrings).
+*   **[x] Task 3.5: API Documentation** (Created `API_HANDOFF.md`).
+*   **[ ] Task 3.6: Cloud Run Deployment (BLOCKER: Credits)**
+    *   Deploy both services to GCP once credits are redeemed.
+    *   Provision `GEMINI_API_KEY` in **GCP Secret Manager** (Mandatory for security marks).
+*   **[ ] Task 3.7: Cross-Service Cloud Link**
+    *   Update the Python service `GENKIT_URL` with the live Cloud Run URL of the AI server.
+
+---
 
 ### **4. Agentic Workflow & Security Lead**
-*   **[x] Task 4.1: Multimodal Forensic Flows** (Gemini 2.5 Flash Lite receipt check).
-*   **[x] Task 4.2: NLP Dispute Mediator** (Unbiased legal arbitration).
-*   **[x] Task 4.3: Zero-Trust Guardrails** (AI Verified + Delivered condition).
-*   **[x] Task 4.4: Prompt Injection Lockdown** (Hardened mandates).
+*   **[x] Task 4.1: Multimodal Forensic Flows** (Gemini 2.5 Flash Lite receipt checks).
+*   **[x] Task 4.2: NLP Dispute Mediator** (Unbiased legal arbitration flow).
+*   **[x] Task 4.3: Zero-Trust Guardrails** (Double-condition payout: AI Verified + Delivered).
+*   **[x] Task 4.4: Prompt Injection Lockdown** (Hardened system mandates).
+*   **[x] Task 4.5: Reasoning & Audit Logs** (AI now outputs step-by-step thinking).
+*   **[x] Task 4.6: Autonomous Proof Run** (Captured logs of the agent acting alone).
+*   **[ ] Task 4.7: Intelligent Thresholds**
+    *   **Action:** Final logic update to auto-dispute transactions where AI confidence is `< 85%`.
 
 ---
 
@@ -96,4 +128,4 @@ Amanah-Bot is built from the ground up using the **Google AI Ecosystem Stack**. 
 *   **Orchestration:** **Firebase Genkit V1** handles our complex agentic flows and state transitions.
 *   **Development:** **Gemini CLI** and **GitHub Copilot** were utilized for architecture and documentation.
 
-**Verification:** 100% of AI-generated logic has been audited for security and Zero-Trust compliance by the human team leads.
+**Verification:** All AI-generated code and logic have been rigorously audited for security and Zero-Trust compliance by the human team leads.
