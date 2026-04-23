@@ -97,6 +97,7 @@ async def upload_receipt(
                 f"{GENKIT_URL}/analyzeReceipt",
                 json={
                     "data": {
+                        "transactionId": escrow_id,
                         "expectedAmount": str(escrow_manager.escrow_db[escrow_id]["price"]),
                         "receiptImageBase64": base64_image
                     }
