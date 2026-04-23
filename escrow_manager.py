@@ -81,8 +81,14 @@ async def start_courier_polling(escrow_id: str, tracking_number: str, backend_ur
 async def release_funds_autonomously(escrow_id: str):
     """
     The 'Action' in Agentic AI. 
-    Unlocks the vault once the physical condition (Delivery) is met.
+    ZERO-TRUST POLICY: Unlocks the vault ONLY if AI has verified the payment 
+    AND physical delivery is confirmed.
     """
+    if not escrow_db[escrow_id].get("ai_verified", False):
+        logger.error(f"ZERO-TRUST VIOLATION: Attempt to release funds for {escrow_id} without AI verification!")
+        await update_escrow_status(escrow_id, EscrowState.DISPUTED)
+        return
+
     logger.info(f"!!! AGENTIC ACTION: Unlocking funds for Escrow {escrow_id} !!!")
     await update_escrow_status(escrow_id, EscrowState.RELEASED)
     # Here we would call the Bank Payout API in production

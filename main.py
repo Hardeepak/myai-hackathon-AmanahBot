@@ -71,6 +71,7 @@ async def upload_receipt(escrow_id: str, background_tasks: BackgroundTasks, file
 
     # Autonomous Logic: If AI confirms authenticity, set to FUNDED and START POLLING
     if analysis.get("is_authentic"):
+        escrow_manager.escrow_db[escrow_id]["ai_verified"] = True
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.FUNDED)
         
         # AGENTIC TRIGGER: Start background polling for delivery
