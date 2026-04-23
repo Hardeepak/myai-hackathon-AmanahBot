@@ -1,10 +1,27 @@
 import asyncio
 import httpx
 import logging
+import json
+import time
 
-# Setup logging for autonomous actions
-logging.basicConfig(level=logging.INFO)
+# Structured Logging Setup
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            "timestamp": time.time(),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "escrow_id": getattr(record, "escrow_id", "N/A"),
+            "agent_action": getattr(record, "agent_action", False)
+        }
+        return json.dumps(log_record)
+
+handler = logging.StreamHandler()
+handler.setFormatter(JsonFormatter())
 logger = logging.getLogger("AmanahBot-Orchestrator")
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+logger.propagate = False # Prevent double logging
 
 class EscrowState:
     PENDING = "Payment_Pending"
@@ -14,20 +31,21 @@ class EscrowState:
     RELEASED = "Released"
     DISPUTED = "Disputed"
 
-# In-memory storage for hackathon demo
-# In production, this would be Firestore/PostgreSQL
+# In-memory storage
 escrow_db = {}
 
 async def update_escrow_status(escrow_id: str, new_status: str):
-    """
-    Updates the state and logs the transition.
-    """
+    """Updates the state and logs the transition in structured JSON."""
     if escrow_id in escrow_db:
         old_status = escrow_db[escrow_id]["status"]
         escrow_db[escrow_id]["status"] = new_status
-        logger.info(f"Escrow {escrow_id}: {old_status} -> {new_status}")
+        logger.info(
+            f"State Transition: {old_status} -> {new_status}", 
+            extra={"escrow_id": escrow_id, "agent_action": True}
+        )
         return True
     return False
+
 
 async def start_courier_polling(escrow_id: str, tracking_number: str, backend_url: str = "http://localhost:8080"):
     """

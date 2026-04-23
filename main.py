@@ -90,6 +90,45 @@ async def get_status(escrow_id: str):
         raise HTTPException(status_code=404, detail="Escrow not found.")
     return escrow_manager.escrow_db[escrow_id]
 
+@app.post("/api/escrow/dispute/{escrow_id}")
+async def raise_dispute(escrow_id: str, buyer_complaint: str, seller_response: str, chat_logs: str):
+    """
+    Routes a dispute to the Genkit AI Mediator for autonomous arbitration.
+    """
+    if escrow_id not in escrow_manager.escrow_db:
+        raise HTTPException(status_code=404, detail="Escrow not found.")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            genkit_resp = await client.post(
+                f"{GENKIT_URL}/resolveDispute",
+                json={
+                    "data": {
+                        "buyerComplaint": buyer_complaint,
+                        "sellerResponse": seller_response,
+                        "chatLogs": chat_logs
+                    }
+                }
+            )
+            resolution = genkit_resp.json().get("result", {})
+    except Exception as e:
+        return {"status": "BRIDGE_ERROR", "message": f"AI Mediator offline: {str(e)}"}
+
+    # Autonomous Action: Update state based on AI verdict
+    action = resolution.get("actionToTake")
+    if action == "REFUND_BUYER":
+        await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.DISPUTED)
+        escrow_manager.escrow_db[escrow_id]["final_verdict"] = "Refund Processed by AI"
+    else:
+        await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.RELEASED)
+        escrow_manager.escrow_db[escrow_id]["final_verdict"] = "Payout Released by AI"
+
+    return {
+        "escrow_id": escrow_id,
+        "ai_resolution": resolution,
+        "new_status": escrow_manager.escrow_db[escrow_id]["status"]
+    }
+
 # Mock Bank Webhook (previous logic)
 @app.post("/api/bank/verify")
 async def verify_payment(transaction_id: str, amount: float):

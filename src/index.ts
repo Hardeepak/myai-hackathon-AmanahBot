@@ -1,5 +1,5 @@
 import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai'; // <-- Removed the bad import here
+import { googleAI } from '@genkit-ai/google-genai';
 import { startFlowServer } from '@genkit-ai/express';
 import { z } from 'zod';
 import * as dotenv from 'dotenv';
@@ -13,35 +13,11 @@ const ai = genkit({
 });
 
 // ==========================================
-// TOOL 1: Mock Courier Status Check
+// FLOW 0: Health Check
 // ==========================================
-export const checkCourierStatusTool = ai.defineTool(
-  {
-    name: 'checkCourierStatus',
-    description: 'Checks the PosLaju/J&T tracking status of a parcel.',
-    inputSchema: z.object({ trackingNumber: z.string() }),
-    outputSchema: z.object({ status: z.string() }),
-  },
-  async (input) => {
-    console.log(`[ACTION Triggered] Checking status for: ${input.trackingNumber}`);
-    return { status: "Delivered" }; 
-  }
-);
-
-// ==========================================
-// TOOL 2: Mock Release Funds
-// ==========================================
-export const releaseFundsTool = ai.defineTool(
-  {
-    name: 'releaseFunds',
-    description: 'Releases the locked escrow funds to the seller bank account.',
-    inputSchema: z.object({ transactionId: z.string(), amount: z.number() }),
-    outputSchema: z.object({ success: z.boolean(), message: z.string() }),
-  },
-  async (input) => {
-    console.log(`[ACTION Triggered] Releasing RM${input.amount} for TX: ${input.transactionId}`);
-    return { success: true, message: "Funds routed to seller." };
-  }
+export const healthCheckFlow = ai.defineFlow(
+  { name: 'healthCheck', inputSchema: z.void(), outputSchema: z.string() },
+  async () => "Genkit AI Server is Healthy"
 );
 
 // ==========================================
@@ -53,13 +29,13 @@ export const receiptForensicsFlow = ai.defineFlow(
     description: 'Analyzes a transfer receipt for fraud and verifies the amount.',
     inputSchema: z.object({
       expectedAmount: z.string().describe("The amount expected, e.g., '50.00'"),
-      receiptImageBase64: z.string().describe("Base64 encoded string of the receipt image (data:image/jpeg;base64,...)"),
+      receiptImageBase64: z.string().describe("Base64 encoded string of the receipt image"),
     }),
     outputSchema: z.object({
       is_authentic: z.boolean(),
       confidence_score: z.number(),
-      pixel_anomaly_detected: z.boolean().describe("True if blurring or noise is found around key text"),
-      font_mismatch_detected: z.boolean().describe("True if font weights or styles are inconsistent"),
+      pixel_anomaly_detected: z.boolean(),
+      font_mismatch_detected: z.boolean(),
       fraud_indicators: z.array(z.string()),
       reasoning: z.string()
     }),
@@ -68,7 +44,7 @@ export const receiptForensicsFlow = ai.defineFlow(
     console.log(`[AGENT RUNNING] Analyzing receipt for RM${input.expectedAmount}...`);
 
     const response = await ai.generate({
-      model: googleAI.model('gemini-2.0-flash'), // Using 2.0 Flash as standard
+      model: googleAI.model('gemini-2.0-flash'),
       output: {
         format: 'json',
         schema: z.object({
@@ -81,15 +57,9 @@ export const receiptForensicsFlow = ai.defineFlow(
         })
       },
       prompt: [
-        { text: `You are an elite forensic banking AI in Malaysia. 
-        Your job is to detect e-commerce payment fraud.
-        
-        TASKS:
-        1. Check for visual anomalies (pixel manipulation, wrong fonts, misaligned text).
-        2. Verify the date makes logical sense.
-        3. Confirm the transfer amount in the image exactly matches the expected amount: RM${input.expectedAmount}.
-        
-        If it looks fake or the amount is wrong, flag it immediately.` },
+        { text: `You are an elite forensic banking AI in Malaysia. Detect e-commerce payment fraud. 
+                 Check for pixel manipulation and font weight inconsistencies. 
+                 Expected amount: RM${input.expectedAmount}` },
         { media: { url: input.receiptImageBase64 } } 
       ],
     });
@@ -99,12 +69,12 @@ export const receiptForensicsFlow = ai.defineFlow(
 );
 
 // ==========================================
-// AGENT 3: AI Dispute Mediator
+// AGENT 2: AI Dispute Mediator
 // ==========================================
 export const disputeMediatorFlow = ai.defineFlow(
   {
     name: 'resolveDispute',
-    description: 'Reads chat logs and evidence to resolve buyer/seller disputes autonomously.',
+    description: 'Reads chat logs and evidence to resolve disputes autonomously.',
     inputSchema: z.object({
       buyerComplaint: z.string(),
       sellerResponse: z.string(),
@@ -117,10 +87,10 @@ export const disputeMediatorFlow = ai.defineFlow(
     })
   },
   async (input) => {
-    console.log(`[AGENT RUNNING] Analyzing dispute between buyer and seller...`);
+    console.log(`[AGENT RUNNING] Analyzing dispute...`);
 
     const response = await ai.generate({
-      model: googleAI.model('gemini-2.5-flash-lite'), // <-- FIXED SYNTAX
+      model: googleAI.model('gemini-2.0-flash'),
       output: {
         format: 'json',
         schema: z.object({
@@ -129,18 +99,7 @@ export const disputeMediatorFlow = ai.defineFlow(
           actionToTake: z.enum(["REFUND_BUYER", "RELEASE_FUNDS_TO_SELLER"])
         })
       },
-      prompt: `You are an unbiased AI arbitrator for an e-commerce platform.
-      Your job is to read the dispute evidence and decide who is at fault based on standard consumer protection logic.
-      
-      Buyer Complaint: "${input.buyerComplaint}"
-      Seller Response: "${input.sellerResponse}"
-      Chat Logs: "${input.chatLogs}"
-      
-      RULES:
-      1. If the seller lied about the condition or never sent it, the BUYER wins.
-      2. If the buyer is experiencing "buyer's remorse" or making a baseless claim, the SELLER wins.
-      
-      Determine the winner, provide a 2-sentence reasoning, and declare the action to take.`
+      prompt: `Act as an unbiased AI arbitrator. Buyer: ${input.buyerComplaint}. Seller: ${input.sellerResponse}. Logs: ${input.chatLogs}`
     });
 
     return response.output;
@@ -151,7 +110,7 @@ export const disputeMediatorFlow = ai.defineFlow(
 // START THE SERVER
 // ==========================================
 startFlowServer({
-  flows: [receiptForensicsFlow, disputeMediatorFlow] 
+  flows: [healthCheckFlow, receiptForensicsFlow, disputeMediatorFlow] 
 });
 
-console.log("🔥 Amanah-Bot V2 is LIVE! Keep this terminal open.");
+console.log("🔥 Amanah-Bot Genkit Server is LIVE on Port 3400!");
