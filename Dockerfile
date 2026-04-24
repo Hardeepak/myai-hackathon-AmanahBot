@@ -1,12 +1,18 @@
 # --- STAGE 1: Build Flutter Web ---
-# Reverting to the image verified as pullable in your earlier logs
 FROM ghcr.io/cirruslabs/flutter:3.24.3 AS flutter-build
 USER root
 WORKDIR /app/amanah_ui
-# Use the simplified pubspec (no linting blockers)
+
+# Copy only pubspec to avoid using old local lock files
 COPY amanah_ui/pubspec.yaml ./
+
+# Force a fresh resolution of dependencies in the cloud
 RUN flutter pub get
+
+# Copy the rest of the UI code
 COPY amanah_ui/ .
+
+# Build for web
 RUN flutter build web --release
 
 # --- STAGE 2: Build Node.js AI Engine ---
@@ -31,7 +37,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy built Flutter web files to 'ui_build'
+# Copy built Flutter web files
 COPY --from=flutter-build /app/amanah_ui/build/web /app/ui_build
 
 # Copy Node source and app code
