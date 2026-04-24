@@ -1,6 +1,6 @@
 # --- STAGE 1: Build Flutter Web ---
-# Using the verified Cirrus Labs Flutter image
-FROM ghcr.io/cirruslabs/flutter:3.24.3 AS flutter-build
+# Using the stable community image for max reliability
+FROM instrumentisto/flutter:stable AS flutter-build
 USER root
 WORKDIR /app/amanah_ui
 COPY amanah_ui/pubspec.* ./
@@ -18,7 +18,7 @@ COPY . .
 # --- STAGE 3: Final Unified Container ---
 FROM python:3.10-slim
 
-# Install Node.js runtime into the Python image
+# Install Node.js runtime
 RUN apt-get update && apt-get install -y curl && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
@@ -33,7 +33,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy built Flutter web files to 'ui_build'
 COPY --from=flutter-build /app/amanah_ui/build/web /app/ui_build
 
-# Copy Node source and app code
+# Copy everything else
 COPY --from=node-build /app /app
 
 # Expose ports
