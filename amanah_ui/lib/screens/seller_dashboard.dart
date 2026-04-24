@@ -17,12 +17,32 @@ class _SellerDashboardState extends State<SellerDashboard> {
   String? _generatedId;
 
   void _createLink() async {
+    // Validate inputs before calling API
+    if (_itemController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter an item description.")),
+      );
+      return;
+    }
+    if (_priceController.text.trim().isEmpty || double.tryParse(_priceController.text.trim()) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid price (numbers only).")),
+      );
+      return;
+    }
+    if (_trackingController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a courier tracking number.")),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final res = await ApiService.createEscrow(
-        _itemController.text,
-        double.parse(_priceController.text),
-        _trackingController.text,
+        _itemController.text.trim(),
+        double.parse(_priceController.text.trim()),
+        _trackingController.text.trim(),
       );
       setState(() {
         _generatedId = res['escrow_id'];
@@ -31,7 +51,9 @@ class _SellerDashboardState extends State<SellerDashboard> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Connection error: Check that the backend is running on port 8000.")),
+        );
       }
     }
   }
