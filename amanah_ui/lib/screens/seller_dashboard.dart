@@ -42,12 +42,28 @@ class _SellerDashboardState extends State<SellerDashboard> {
 
   void _copyLink() {
     if (_generatedId != null) {
-      final link = "https://amanah-bot.web.app/pay/$_generatedId";
-      Clipboard.setData(ClipboardData(text: link));
+      // Only copy the ID as requested
+      Clipboard.setData(ClipboardData(text: _generatedId!));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("🚀 Link copied! Ready to send on WhatsApp."), backgroundColor: Colors.blueAccent)
+        const SnackBar(content: Text("✅ Escrow ID copied! Paste this in the Buyer tab."), backgroundColor: Colors.blueAccent)
       );
     }
+  }
+
+  void _shareLink() {
+    if (_generatedId != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("📱 Opening WhatsApp Share..."), backgroundColor: Colors.green)
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _itemController.dispose();
+    _priceController.dispose();
+    _trackingController.dispose();
+    super.dispose();
   }
 
   @override
@@ -125,7 +141,7 @@ class _SellerDashboardState extends State<SellerDashboard> {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _copyLink, // Logic for external share would go here
+                  onPressed: _shareLink, // Logic for external share would go here
                   icon: const Icon(Icons.share, size: 18, color: Colors.white),
                   label: const Text("SHARE", style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withOpacity(0.6)),
