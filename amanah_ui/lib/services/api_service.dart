@@ -4,9 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 
 class ApiService {
-  // Use 10.0.2.2 for Android Emulator, localhost for Web. 
-  // TODO: Update to your Cloud Run URL once deployed.
-  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8000');
+  // Standardized port 8080 for FastAPI Bridge
+  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8080');
 
   static Future<Map<String, dynamic>> createEscrow(
       String itemName, double price, String trackingNumber) async {
@@ -63,15 +62,14 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> raiseDispute(
-      String escrowId, String complaint, String aiReasoning, String history) async {
+      String escrowId, String complaint, String sellerResponse, String logs) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/dispute/raise'),
+      Uri.parse('$baseUrl/api/escrow/dispute/$escrowId'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'escrow_id': escrowId,
-        'user_complaint': complaint,
-        'ai_reasoning': aiReasoning,
-        'chat_history': history,
+        'buyer_complaint': complaint,
+        'seller_response': sellerResponse,
+        'chat_logs': logs,
       }),
     );
 
