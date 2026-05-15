@@ -152,6 +152,10 @@ cygcrit.txt
 build/
 ios/.generated/
 
+# Claude Code artifacts
+.claude/
+**/.claude/
+
 # API Keys and Secrets
 secrets.json
 *.pem
