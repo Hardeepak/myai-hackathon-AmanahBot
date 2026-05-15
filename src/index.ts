@@ -181,5 +181,5 @@ export const healthCheckFlow = ai.defineFlow(
   async () => "Genkit AI Server is Healthy"
 );
 
-startFlowServer({ flows: [healthCheckFlow, receiptForensicsFlow, disputeMediatorFlow] });
+startFlowServer({ flows: [healthCheckFlow, receiptForensicsFlow, disputeMediatorFlow], port: 3400 });
 console.log("🔥 Amanah-Bot Genkit Server LIVE on Port 3400");
