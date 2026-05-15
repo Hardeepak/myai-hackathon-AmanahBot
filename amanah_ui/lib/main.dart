@@ -8,12 +8,12 @@ void main() async {
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
-        apiKey: "AIzaSyAodNox6oC7tyePvrIONb3IWlww-Dt4N10",
-        appId: "1:800391755352:web:5de12f4dd512b7f6c0bc2d",
-        messagingSenderId: "800391755352",
-        projectId: "kitahack-2332b",
-        storageBucket: "kitahack-2332b.firebasestorage.app",
-        authDomain: "kitahack-2332b.firebaseapp.com",
+        apiKey: "PASTE_YOUR_API_KEY_HERE",
+        appId: "PASTE_YOUR_APP_ID_HERE",
+        messagingSenderId: "PASTE_YOUR_SENDER_ID_HERE",
+        projectId: "PASTE_YOUR_PROJECT_ID_HERE",
+        storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
+        authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
       ),
     );
   } catch (e) {
