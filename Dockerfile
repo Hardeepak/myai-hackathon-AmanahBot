@@ -37,11 +37,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy built Flutter web files
-COPY --from=flutter-build /app/amanah_ui/build/web /app/ui_build
-
-# Copy Node source and app code
+# Copy Node source and app code FIRST
 COPY --from=node-build /app /app
+
+# Copy built Flutter web files AFTER (so they don't get overwritten)
+COPY --from=flutter-build /app/amanah_ui/build/web /app/ui_build
 
 # Expose ports
 EXPOSE 8080

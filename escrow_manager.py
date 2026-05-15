@@ -1,4 +1,5 @@
 import asyncio
+import os
 import httpx
 import logging
 import json
@@ -115,7 +116,8 @@ async def run_local_pickup_sequence(escrow_id: str):
     await release_funds_autonomously(escrow_id)
 
 async def run_standard_polling(escrow_id: str, tracking_number: str):
-    backend_url = "http://127.0.0.1:8080"
+    port = os.environ.get("PORT", "8080")
+    backend_url = f"http://127.0.0.1:{port}"
     attempts = 0
     while attempts < 20:
         try:
