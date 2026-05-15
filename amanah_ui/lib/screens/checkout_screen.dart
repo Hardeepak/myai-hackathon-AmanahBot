@@ -112,9 +112,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       
       if (_status != "Payment_Pending") _isAnalyzing = false;
 
-      // Logic for Reasoning Text
+      // 🔥 DYNAMIC REASONING
+      final String rejectionType = data['rejection_type'] ?? "NONE";
+      final String rejectionReason = data['rejection_reason'] ?? "";
+
       if (_status == "Disputed") {
-        _reasoning = "🚨 REJECTED: AI detected fraud or amount mismatch.";
+        if (rejectionType == "FAKE_RECEIPT") {
+          _reasoning = "🚨 SCAM ALERT: This receipt is FORGED or INVALID.";
+        } else if (rejectionType == "AMOUNT_MISMATCH") {
+          _reasoning = "🚨 REJECTED: $rejectionReason";
+        } else {
+          _reasoning = "🚨 REJECTED: Security check failed.";
+        }
       } else if (_status == "Released") {
         _reasoning = "SUCCESS: Autonomous payout executed.";
       } else if (_status == "Delivered") {
@@ -132,7 +141,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double _getProgress() {
     switch (_status) {
       case "Payment_Pending": return 0.1;
-      case "Disputed": return 0.4; // Stop at verification step
+      case "Disputed": return 0.4; 
       case "Funded": return 0.4; 
       case "In_Transit": return 0.6;
       case "Delivered": return 0.8;
@@ -263,7 +272,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               height: 12,
               width: MediaQuery.of(context).size.width * _getProgress(),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: isError ? [Colors.redAccent, Colors.red] : [Colors.blueAccent, Colors.greenAccent]),
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: isError ? [Colors.red, Colors.redAccent] : [Colors.blueAccent, Colors.greenAccent]
+                ),
                 borderRadius: BorderRadius.circular(6),
                 boxShadow: [BoxShadow(color: (isError ? Colors.red : Colors.blueAccent).withOpacity(0.3), blurRadius: 10)],
               ),
@@ -283,31 +296,45 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildStatusText("IDENTIFIED", true),
-            _buildStatusText("VERIFIED", _getProgress() >= 0.4, isError: isError),
-            _buildStatusText("TRANSIT", _getProgress() >= 0.6),
-            _buildStatusText("RELEASE", _getProgress() >= 1.0),
+            _buildStatusText("IDENTIFIED", true, false),
+            _buildStatusText("VERIFIED", _getProgress() >= 0.4, isError),
+            _buildStatusText("TRANSIT", _getProgress() >= 0.6, false),
+            _buildStatusText("RELEASE", _getProgress() >= 1.0, false),
           ],
         )
       ],
     );
   }
 
-  Widget _buildStatusText(String label, bool active, {bool isError = false}) {
+  Widget _buildStatusText(String label, bool active, bool isError) {
     Color color = Colors.white24;
-    if (active) color = isError ? Colors.redAccent : Colors.blueAccent;
+    if (active) {
+      color = isError ? Colors.redAccent : Colors.blueAccent;
+    }
     return Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1));
   }
 
   Widget _buildWarningCard() {
+    final String rejectionType = _fullData['rejection_type'] ?? "NONE";
+    final String rejectionReason = _fullData['rejection_reason'] ?? "Receipt check failed.";
+    
+    String title = "SCAM DETECTED";
+    if (rejectionType == "AMOUNT_MISMATCH") title = "AMOUNT MISMATCH";
+
     return Container(
       margin: const EdgeInsets.only(top: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.redAccent.withOpacity(0.3))),
-      child: const Row(children: [
-        Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
-        SizedBox(width: 12),
-        Expanded(child: Text("SCAM DETECTED: The uploaded receipt is invalid or modified. Please upload a valid document.", style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold))),
+      child: Row(children: [
+        const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+        const SizedBox(width: 12),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(rejectionReason, style: TextStyle(color: Colors.redAccent.withOpacity(0.7), fontSize: 11)),
+          ],
+        )),
       ]),
     );
   }

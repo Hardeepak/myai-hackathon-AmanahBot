@@ -13,6 +13,10 @@ import base64
 import hashlib
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 
 # --- FIREBASE INITIALIZATION ---
 cred_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY", "service-account.json")
@@ -150,17 +154,23 @@ async def upload_receipt(
             analysis = genkit_resp.json().get("result", {})
     except Exception as e:
         print(f"⚠️ AI Bridge Failed: {e}")
-        # FALLBACK TO DEMO
-        doc_ref.update({"ai_verified": True})
-        await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.FUNDED)
-        background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, data["tracking_number"])
-        return {"status": "DEMO_MODE", "current_status": "Funded"}
+        # SECURITY FIX: Do NOT approve on failure. Move to Disputed.
+        doc_ref.update({
+            "ai_verified": False,
+            "rejection_type": "ENGINE_TIMEOUT",
+            "rejection_reason": "AI Security Engine failed to respond. Session locked for safety.",
+            "logs": firestore.ArrayUnion([f"⚠️ SECURITY: AI Analysis Timed Out. Transaction Halted."])
+        })
+        await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.DISPUTED)
+        return {"status": "HALTED", "message": "Security engine timeout."}
 
     is_authentic = analysis.get("is_authentic", False)
     confidence = analysis.get("confidence_score", 0)
     reasoning = analysis.get("reasoning", "Unknown reason")
+    rejection_type = analysis.get("rejection_type", "NONE")
 
-    if is_authentic and confidence >= 85:
+    # STRICT SUCCESS CRITERIA
+    if is_authentic and confidence >= 85 and rejection_type == "NONE":
         doc_ref.update({
             "ai_verified": True,
             "logs": firestore.ArrayUnion([f"AI VERDICT: Authentic ({confidence}%)"])
@@ -169,12 +179,14 @@ async def upload_receipt(
         background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, data["tracking_number"])
     else:
         # 🔥 REJECTION LOGIC
+        error_msg = f"🚨 AI REJECTED [{rejection_type}]: {reasoning}"
         doc_ref.update({
             "ai_verified": False,
-            "logs": firestore.ArrayUnion([f"🚨 AI REJECTED: {reasoning}"])
+            "rejection_type": rejection_type,
+            "rejection_reason": reasoning,
+            "logs": firestore.ArrayUnion([error_msg])
         })
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.DISPUTED)
-        # We DON'T start courier polling if rejected
 
     return {
         "escrow_id": escrow_id,
