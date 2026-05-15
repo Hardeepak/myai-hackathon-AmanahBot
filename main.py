@@ -246,5 +246,5 @@ if os.path.exists("ui_build"):
 
 if __name__ == "__main__":
     import uvicorn
-    # Use 0.0.0.0 to listen on all interfaces
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
