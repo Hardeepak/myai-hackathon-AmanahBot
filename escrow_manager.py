@@ -3,6 +3,7 @@ import httpx
 import logging
 import json
 import time
+from firebase_admin import firestore
 
 # Structured Logging Setup
 class JsonFormatter(logging.Formatter):
@@ -31,55 +32,87 @@ class EscrowState:
     RELEASED = "Released"
     DISPUTED = "Disputed"
 
-# In-memory storage
-escrow_db = {}
+def get_db():
+    return firestore.client()
 
 async def update_escrow_status(escrow_id: str, new_status: str):
-    """Updates state and adds professional log entries."""
-    if escrow_id in escrow_db:
-        old_status = escrow_db[escrow_id]["status"]
-        escrow_db[escrow_id]["status"] = new_status
+    """Updates state in Firestore and adds professional log entries."""
+    db = get_db()
+    doc_ref = db.collection("escrows").document(escrow_id)
+    doc = doc_ref.get()
+    
+    if doc.exists:
+        data = doc.to_dict()
+        old_status = data.get("status", "Unknown")
         
         timestamp = time.strftime("%H:%M:%S")
         log_msg = f"[{timestamp}] AGENT: {old_status} -> {new_status}"
-        escrow_db[escrow_id].setdefault("logs", []).append(log_msg)
+        
+        doc_ref.update({
+            "status": new_status,
+            "logs": firestore.ArrayUnion([log_msg])
+        })
         return True
     return False
 
 async def start_courier_polling(escrow_id: str, tracking_number: str):
     """
-    Master Orchestrator: Detects if this is a demo and launches the fast-forward sequence.
+    Master Orchestrator: Detects category and demo mode to launch specific sequences.
     """
-    if tracking_number.endswith("3"):
-        # Launch the high-impact demo sequence
-        await run_demo_sequence(escrow_id)
-    else:
-        # Standard real-time polling logic
-        await run_standard_polling(escrow_id, tracking_number)
+    db = get_db()
+    doc = db.collection("escrows").document(escrow_id).get()
+    if not doc.exists: return
+    
+    data = doc.to_dict()
+    category = data.get("category", "Online Business")
 
-async def run_demo_sequence(escrow_id: str):
+    if tracking_number.endswith("3"):
+        await run_demo_sequence(escrow_id, category)
+    else:
+        # If Roadside Stall, use a simplified confirmation instead of courier polling
+        if category == "Roadside Stall":
+            await run_local_pickup_sequence(escrow_id)
+        else:
+            await run_standard_polling(escrow_id, tracking_number)
+
+async def run_demo_sequence(escrow_id: str, category: str):
     """
     Guaranteed progression for hackathon judges.
-    Moves from 3 -> 4 -> 5 with 3-second delays.
     """
-    logs = escrow_db[escrow_id].setdefault("logs", [])
+    db = get_db()
+    doc_ref = db.collection("escrows").document(escrow_id)
     
-    # --- PHASE 3: IN TRANSIT ---
-    await asyncio.sleep(3)
-    await update_escrow_status(escrow_id, EscrowState.IN_TRANSIT)
-    logs.append("AGENT: [SCAN] Parcel intercepted by PosLaju Hub (Skudai).")
-    
-    # --- PHASE 4: DELIVERED ---
-    await asyncio.sleep(3)
-    await update_escrow_status(escrow_id, EscrowState.DELIVERED)
-    logs.append("AGENT: [GEO-FENCE] AI confirmed delivery at Buyer coordinates.")
+    if category == "Roadside Stall":
+        # Roadside stalls skip 'In Transit'
+        await asyncio.sleep(3)
+        doc_ref.update({"logs": firestore.ArrayUnion(["AGENT: [GPS] Buyer confirmed present at stall coordinates."])})
+        await update_escrow_status(escrow_id, EscrowState.DELIVERED)
+    else:
+        # --- PHASE 3: IN TRANSIT ---
+        await asyncio.sleep(3)
+        await update_escrow_status(escrow_id, EscrowState.IN_TRANSIT)
+        doc_ref.update({"logs": firestore.ArrayUnion(["AGENT: [SCAN] Parcel intercepted by PosLaju Hub (Skudai)."])})
+        
+        # --- PHASE 4: DELIVERED ---
+        await asyncio.sleep(3)
+        await update_escrow_status(escrow_id, EscrowState.DELIVERED)
+        doc_ref.update({"logs": firestore.ArrayUnion(["AGENT: [GEO-FENCE] AI confirmed delivery at Buyer coordinates."])})
 
     # --- PHASE 5: RELEASED ---
     await asyncio.sleep(3)
-    logs.append("AGENT: Condition [AI_VERIFIED + DELIVERED] met. Executing Payout...")
+    doc_ref.update({"logs": firestore.ArrayUnion(["AGENT: Condition [AI_VERIFIED + DELIVERED] met. Executing Payout..."])})
     await update_escrow_status(escrow_id, EscrowState.RELEASED)
-    escrow_db[escrow_id]["payout_executed"] = True
-    logs.append("AGENT: Fund release successful via Bank Bridge. Session Closed.")
+    doc_ref.update({
+        "payout_executed": True,
+        "logs": firestore.ArrayUnion(["AGENT: Fund release successful via Bank Bridge. Session Closed."])
+    })
+
+async def run_local_pickup_sequence(escrow_id: str):
+    """Simplified sequence for roadside stalls/local SME pickup."""
+    await asyncio.sleep(5)
+    await update_escrow_status(escrow_id, EscrowState.DELIVERED)
+    await asyncio.sleep(2)
+    await release_funds_autonomously(escrow_id)
 
 async def run_standard_polling(escrow_id: str, tracking_number: str):
     backend_url = "http://127.0.0.1:8080"
@@ -99,4 +132,5 @@ async def run_standard_polling(escrow_id: str, tracking_number: str):
 
 async def release_funds_autonomously(escrow_id: str):
     await update_escrow_status(escrow_id, EscrowState.RELEASED)
-    escrow_db[escrow_id]["payout_executed"] = True
+    db = get_db()
+    db.collection("escrows").document(escrow_id).update({"payout_executed": True})

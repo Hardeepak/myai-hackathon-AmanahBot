@@ -2,26 +2,46 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
-
-import 'dart:html' as html; // Added for domain detection
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:html' as html;
+import '../services/demo_state.dart';
 
 class ApiService {
-  // Automatically uses the domain it's hosted on (e.g., your Cloud Run URL)
   static String get baseUrl {
     final String origin = html.window.location.origin;
-    // If running locally, default to 8080. If in cloud, use the cloud URL.
-    return origin.contains('localhost') ? 'http://localhost:8080' : origin;
+    // Use 127.0.0.1 instead of localhost to avoid some Chrome/CORS edge cases
+    return origin.contains('localhost') ? 'http://127.0.0.1:8080' : origin;
+  }
+
+  static Future<Map<String, String>> _getHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
   }
 
   static Future<Map<String, dynamic>> createEscrow(
-      String itemName, double price, String trackingNumber) async {
+      String itemName, double price, String trackingNumber, String category) async {
+    final user = FirebaseAuth.instance.currentUser;
+    
+    // Support Stealth Demo Mode with fallback UID
+    String uid = user?.uid ?? (DemoState.isDemoMode ? "demo_seller_123" : "");
+    if (uid.isEmpty) throw Exception("User not authenticated");
+
+    print("POST: $baseUrl/api/escrow/create");
+
     final response = await http.post(
       Uri.parse('$baseUrl/api/escrow/create'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _getHeaders(),
       body: jsonEncode({
         'item_name': itemName,
         'price': price,
         'tracking_number': trackingNumber,
+        'seller_uid': uid,
+        'category': category,
       }),
     );
 
@@ -32,12 +52,39 @@ class ApiService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> getSellerEscrows() async {
+    final user = FirebaseAuth.instance.currentUser;
+    // In demo mode, we might not have a UID to query Firestore. Fallback to demo UID.
+    String uid = user?.uid ?? (DemoState.isDemoMode ? "demo_seller_123" : "");
+    if (uid.isEmpty) return [];
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('escrows')
+        .where('seller_uid', isEqualTo: uid)
+        .orderBy('created_at', descending: true)
+        .get();
+
+    return snapshot.docs.map<Map<String, dynamic>>((doc) {
+      final data = doc.data();
+      return {
+        ...data,
+        'escrow_id': doc.id,
+      };
+    }).toList();
+  }
+
   static Future<Map<String, dynamic>> uploadReceipt(
       String escrowId, XFile imageFile) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+
     var request = http.MultipartRequest(
         'POST', Uri.parse('$baseUrl/api/escrow/upload-receipt/$escrowId'));
     
-    // Support Flutter Web by using readAsBytes
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
     final bytes = await imageFile.readAsBytes();
     request.files.add(http.MultipartFile.fromBytes(
       'file',
@@ -57,8 +104,10 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getEscrowStatus(String escrowId) async {
-    final response =
-        await http.get(Uri.parse('$baseUrl/api/escrow/status/$escrowId'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/escrow/status/$escrowId'),
+      headers: await _getHeaders(),
+    );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -71,7 +120,7 @@ class ApiService {
       String escrowId, String complaint, String sellerResponse, String logs) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/escrow/dispute/$escrowId'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _getHeaders(),
       body: jsonEncode({
         'buyer_complaint': complaint,
         'seller_response': sellerResponse,

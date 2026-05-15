@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/reasoning_bar.dart';
+import '../widgets/glass_card.dart';
 import '../services/api_service.dart';
+import '../services/pdf_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final String? escrowId;
@@ -15,10 +18,12 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _status = "Payment_Pending";
   String _reasoning = "Waiting for DuitNow receipt upload...";
-  String _itemName = "Secure Transaction";
+  String _itemName = "Scanning for ID...";
   String _itemPrice = "0.00";
   List<String> _agentLogs = ["SYSTEM: Connection established.", "READY: Waiting for user action."];
   bool _isAnalyzing = false;
+  Map<String, dynamic> _fullData = {};
+  StreamSubscription? _escrowSubscription;
   Timer? _pollingTimer;
   final TextEditingController _idController = TextEditingController();
 
@@ -27,58 +32,159 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.initState();
     _idController.addListener(_onIdChanged);
     if (widget.escrowId != null) {
-      _idController.text = widget.escrowId!;
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _idController.text = widget.escrowId!;
+        _startSync(widget.escrowId!);
+      });
     }
+  }
+
+  @override
+  void dispose() {
+    _escrowSubscription?.cancel();
+    _pollingTimer?.cancel();
+    _idController.dispose();
+    super.dispose();
   }
 
   void _onIdChanged() {
     final id = _idController.text.trim();
     if (id.length == 8) {
-      _fetchStatus(id);
-      _startStatusPolling(id); // FIXED: Start polling immediately on ID match
-    }
-  }
-
-  void _fetchStatus(String id) async {
-    try {
-      final res = await ApiService.getEscrowStatus(id);
+      _startSync(id);
+    } else if (id.isEmpty) {
+      _stopSync();
       setState(() {
-        _status = res['status'];
-        _itemName = res['item'] ?? "Secure Item";
-        _itemPrice = (res['price'] ?? 0.0).toStringAsFixed(2);
-        _agentLogs = List<String>.from(res['logs'] ?? []);
-        
-        // Update reasoning based on existing status
-        if (_status == "Released") {
-           _reasoning = "SUCCESS: Autonomous payout executed.";
-        } else if (_status == "In_Transit") {
-           _reasoning = "AGENT: Courier confirmed pickup. Monitoring...";
-        }
+        _itemName = "Enter valid Escrow ID";
+        _itemPrice = "0.00";
+        _agentLogs = ["READY: Awaiting input."];
       });
-    } catch (e) {
-      print("Status fetch error: $e");
     }
   }
 
-  // Visual Stepper Logic
-  int _currentStep() {
-    switch (_status) {
-      case "Payment_Pending": return 0;
-      case "Funded": return 2; // Step 2 "Done"
-      case "In_Transit": return 3;
-      case "Delivered": return 4;
-      case "Released": return 5;
-      case "Disputed": return 1; 
-      default: return 0;
+  void _stopSync() {
+    _escrowSubscription?.cancel();
+    _pollingTimer?.cancel();
+  }
+
+  void _startSync(String id) {
+    _stopSync();
+    print("DEBUG: Starting Sync for ID: $id");
+    _startFirestoreSubscription(id);
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      _fetchViaRest(id);
+    });
+    _fetchViaRest(id);
+  }
+
+  void _startFirestoreSubscription(String id) {
+    _escrowSubscription = FirebaseFirestore.instance
+        .collection('escrows')
+        .doc(id)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        _updateUIFromData(snapshot.data() as Map<String, dynamic>);
+      }
+    }, onError: (error) {
+      print("DEBUG: Firestore Stream blocked. Falling back to REST.");
+    });
+  }
+
+  Future<void> _fetchViaRest(String id) async {
+    try {
+      final data = await ApiService.getEscrowStatus(id);
+      _updateUIFromData(data);
+    } catch (e) {
+      print("DEBUG: REST Fetch Error: $e");
     }
+  }
+
+  void _updateUIFromData(Map<String, dynamic> data) {
+    if (!mounted) return;
+    setState(() {
+      _fullData = data;
+      _status = data['status'] ?? "Payment_Pending";
+      _itemName = data['item'] ?? "Secure Item";
+      _itemPrice = (data['price'] ?? 0.0).toStringAsFixed(2);
+      
+      final rawLogs = data['logs'] as List<dynamic>? ?? [];
+      _agentLogs = rawLogs.map((e) => e.toString()).toList();
+      
+      if (_status != "Payment_Pending") _isAnalyzing = false;
+
+      // Logic for Reasoning Text
+      if (_status == "Disputed") {
+        _reasoning = "🚨 REJECTED: AI detected fraud or amount mismatch.";
+      } else if (_status == "Released") {
+        _reasoning = "SUCCESS: Autonomous payout executed.";
+      } else if (_status == "Delivered") {
+        _reasoning = "AGENT: Delivery confirmed. Verifying release...";
+      } else if (_status == "In_Transit") {
+        _reasoning = "AGENT: Parcel in transit. Monitoring courier...";
+      } else if (_status == "Funded") {
+        _reasoning = "AI verified receipt. Waiting for pickup...";
+      } else {
+        _reasoning = "Waiting for DuitNow receipt upload...";
+      }
+    });
+  }
+
+  double _getProgress() {
+    switch (_status) {
+      case "Payment_Pending": return 0.1;
+      case "Disputed": return 0.4; // Stop at verification step
+      case "Funded": return 0.4; 
+      case "In_Transit": return 0.6;
+      case "Delivered": return 0.8;
+      case "Released": return 1.0;
+      default: return 0.1;
+    }
+  }
+
+  void _showFullLogs() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0F172A),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.history, color: Colors.blueAccent),
+                  SizedBox(width: 12),
+                  Text("TRANSACTION AUDIT LOG", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _agentLogs.length,
+                  itemBuilder: (context, index) {
+                    final log = _agentLogs[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(
+                        log,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13, fontFamily: 'monospace'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _pickAndUpload() async {
     final id = _idController.text.trim();
-    if (id.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a valid Escrow ID")));
-      return;
-    }
+    if (id.isEmpty) return;
     
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
@@ -86,46 +192,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (image != null) {
       setState(() {
         _isAnalyzing = true;
-        _reasoning = "AGENT: Scanning pixels for forensic manipulation...";
-        _agentLogs.add("AI BRIDGE: Initializing multimodal forensics...");
+        _reasoning = "AGENT: Running multimodal pixel forensics...";
       });
-      
       try {
-        final res = await ApiService.uploadReceipt(id, image);
-        setState(() {
-          _status = res['current_status'];
-          _reasoning = res['ai_verdict']['reasoning'] ?? "AI confirmed authenticity.";
-          _agentLogs = List<String>.from(res['ai_verdict']['logs'] ?? _agentLogs);
-          _isAnalyzing = false;
-        });
-        _startStatusPolling(id);
+        await ApiService.uploadReceipt(id, image);
       } catch (e) {
-        setState(() {
-          _isAnalyzing = false;
-          _reasoning = "ERROR: Bridge failed.";
-          _agentLogs.add("CRITICAL: Failed to reach AI node.");
-        });
+        if (mounted) setState(() { _isAnalyzing = false; _reasoning = "ERROR: Bridge failed."; });
       }
     }
-  }
-
-  void _startStatusPolling(String id) {
-    _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
-      try {
-        final res = await ApiService.getEscrowStatus(id);
-        setState(() {
-          _status = res['status'];
-          _agentLogs = List<String>.from(res['logs'] ?? []);
-          if (_status == "Released") {
-            _reasoning = "SUCCESS: Autonomous payout executed.";
-            timer.cancel();
-          }
-        });
-      } catch (e) {
-        timer.cancel();
-      }
-    });
   }
 
   @override
@@ -139,14 +213,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(),
-              const SizedBox(height: 30),
-              _buildStepper(),
+              const SizedBox(height: 40),
+              _buildAnimatedProgress(),
               const SizedBox(height: 40),
               _buildProductCard(),
+              if (_status == "Disputed") _buildWarningCard(),
               const SizedBox(height: 24),
-              _buildAgentConsole(), // THE NEW CONSOLE
+              _buildAgentConsole(),
               const SizedBox(height: 24),
-              if (_status == "Payment_Pending") _buildActionButton(),
+              if (_status == "Payment_Pending" || _status == "Disputed") _buildActionButton(),
               const SizedBox(height: 40),
               const Center(child: Text("🔒 AMANAH-CORE PROTOCOL ACTIVE", style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 1.5))),
             ],
@@ -162,50 +237,84 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       const SizedBox(width: 10),
       const Text("AMANAH", style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16)),
       const Spacer(),
+      if (_status != "Payment_Pending" && _status != "Scanning for ID...")
+        IconButton(
+          onPressed: () => PdfService.generateEvidenceReport(_fullData, _idController.text.trim()),
+          icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white38, size: 20),
+        ),
       if (_isAnalyzing) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent)),
     ]);
   }
 
-  Widget _buildStepper() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(5, (index) {
-        bool isDone = index < _currentStep();
-        bool isCurrent = index == _currentStep();
-        return Expanded(
-          child: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDone ? Colors.greenAccent : (isCurrent ? Colors.blueAccent : Colors.white10),
-                  border: Border.all(color: isCurrent ? Colors.white24 : Colors.transparent),
-                ),
-                child: Center(
-                  child: isDone 
-                    ? const Icon(Icons.check, size: 14, color: Colors.black)
-                    : Text("${index + 1}", style: TextStyle(color: isCurrent ? Colors.white : Colors.white24, fontSize: 10, fontWeight: FontWeight.bold)),
+  Widget _buildAnimatedProgress() {
+    bool isError = _status == "Disputed";
+    return Column(
+      children: [
+        Stack(
+          children: [
+            Container(
+              height: 12,
+              width: double.infinity,
+              decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(6)),
+            ),
+            AnimatedContainer(
+              duration: const Duration(seconds: 1),
+              curve: Curves.easeInOutCubic,
+              height: 12,
+              width: MediaQuery.of(context).size.width * _getProgress(),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: isError ? [Colors.redAccent, Colors.red] : [Colors.blueAccent, Colors.greenAccent]),
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [BoxShadow(color: (isError ? Colors.red : Colors.blueAccent).withOpacity(0.3), blurRadius: 10)],
+              ),
+            ),
+            if (isError)
+              Positioned(
+                left: (MediaQuery.of(context).size.width * 0.4) - 10,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, color: Colors.white, size: 12),
                 ),
               ),
-              if (index < 4) Expanded(child: Container(height: 1, color: isDone ? Colors.greenAccent.withOpacity(0.3) : Colors.white10)),
-            ],
-          ),
-        );
-      }),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildStatusText("IDENTIFIED", true),
+            _buildStatusText("VERIFIED", _getProgress() >= 0.4, isError: isError),
+            _buildStatusText("TRANSIT", _getProgress() >= 0.6),
+            _buildStatusText("RELEASE", _getProgress() >= 1.0),
+          ],
+        )
+      ],
+    );
+  }
+
+  Widget _buildStatusText(String label, bool active, {bool isError = false}) {
+    Color color = Colors.white24;
+    if (active) color = isError ? Colors.redAccent : Colors.blueAccent;
+    return Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1));
+  }
+
+  Widget _buildWarningCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.redAccent.withOpacity(0.3))),
+      child: const Row(children: [
+        Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+        SizedBox(width: 12),
+        Expanded(child: Text("SCAM DETECTED: The uploaded receipt is invalid or modified. Please upload a valid document.", style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold))),
+      ]),
     );
   }
 
   Widget _buildProductCard() {
-    return Container(
-      width: double.infinity,
+    return GlassCard(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
-      ),
       child: Column(children: [
         TextField(
           controller: _idController,
@@ -223,20 +332,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _buildAgentConsole() {
     return Container(
       width: double.infinity,
-      height: 120,
+      height: 160,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.2)),
-      ),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withOpacity(0.2))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.terminal, color: Colors.greenAccent, size: 14),
-            SizedBox(width: 8),
-            Text("AGENT_ACTIVITY_LOG", style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+          Row(children: [
+            const Icon(Icons.terminal, color: Colors.greenAccent, size: 14),
+            const SizedBox(width: 8),
+            const Text("AGENT_ACTIVITY_LOG", style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            GestureDetector(onTap: () => _showFullLogs(), child: const Text("EXPAND", style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold))),
           ]),
           const Divider(color: Colors.white10),
           Expanded(
@@ -258,17 +365,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildActionButton() {
+    bool isError = _status == "Disputed";
     return SizedBox(
       width: double.infinity,
       height: 60,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blueAccent, 
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 0
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: isError ? Colors.redAccent : Colors.blueAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
         onPressed: _pickAndUpload,
-        child: const Text("UPLOAD PROOF OF PAYMENT", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        child: Text(isError ? "RE-UPLOAD VALID PROOF" : "UPLOAD PROOF OF PAYMENT", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
   }

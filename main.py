@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -10,13 +10,32 @@ import httpx
 import escrow_manager
 import uuid
 import base64
-import hashlib # Added for independent hashing
+import hashlib
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
+
+# --- FIREBASE INITIALIZATION ---
+cred_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY", "service-account.json")
+if os.path.exists(cred_path):
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
+    print("🔥 Firebase Init: Using service-account.json")
+else:
+    try:
+        firebase_admin.initialize_app()
+        print("🔥 Firebase Init: Using Default Credentials")
+    except Exception as e:
+        print(f"⚠️ Firebase Init Warning: {e}")
+
+db = firestore.client()
 
 # --- REQUEST SCHEMAS ---
 class EscrowCreate(BaseModel):
     item_name: str
     price: float
     tracking_number: str
+    seller_uid: str
+    category: str = "Online Business"
 
 class DisputeRequest(BaseModel):
     buyer_complaint: str
@@ -30,18 +49,29 @@ app = FastAPI(
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
+    print(f"❌ Validation Error: {exc.errors()}")
     return JSONResponse(
         status_code=422,
-        content={"status": "INVALID_INPUT", "message": "Malformed request structure detected."}
+        content={"status": "INVALID_INPUT", "message": str(exc.errors())}
     )
 
+# --- CORS MIDDLEWARE (RELAXED FOR LOCAL TESTING) ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# MIDDLEWARE TO LOG EVERY REQUEST
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"📥 Incoming: {request.method} {request.url.path}")
+    response = await call_next(request)
+    print(f"📤 Outgoing: Status {response.status_code}")
+    return response
 
 GENKIT_URL: str = os.environ.get("GENKIT_URL", "http://127.0.0.1:3400")
 
@@ -51,17 +81,29 @@ async def health_check() -> Dict[str, str]:
 
 @app.post("/api/escrow/create")
 async def create_escrow(request: EscrowCreate) -> Dict[str, str]:
+    print(f"🛠️ Creating Escrow for {request.item_name} (RM {request.price})")
     escrow_id = str(uuid.uuid4())[:8]
-    escrow_manager.escrow_db[escrow_id] = {
+    escrow_data = {
         "item": request.item_name,
         "price": request.price,
         "tracking_number": request.tracking_number,
+        "seller_uid": request.seller_uid,
+        "category": request.category,
         "status": escrow_manager.EscrowState.PENDING,
         "ai_verified": False,
         "payout_executed": False,
         "receipt_hash": None,
-        "logs": ["Session Created", f"Tracking: {request.tracking_number}"]
+        "logs": ["Session Created", f"Category: {request.category}", f"Tracking: {request.tracking_number}"],
+        "created_at": firestore.SERVER_TIMESTAMP
     }
+    
+    try:
+        db.collection("escrows").document(escrow_id).set(escrow_data)
+        print(f"✅ Escrow {escrow_id} saved to Firestore.")
+    except Exception as e:
+        print(f"❌ Firestore Error: {e}")
+        raise HTTPException(status_code=500, detail="Database write failed.")
+        
     return {"escrow_id": escrow_id, "status": escrow_manager.EscrowState.PENDING}
 
 @app.post("/api/escrow/upload-receipt/{escrow_id}")
@@ -70,14 +112,21 @@ async def upload_receipt(
     background_tasks: BackgroundTasks, 
     file: UploadFile = File(...)
 ) -> Dict[str, Any]:
-    if escrow_id not in escrow_manager.escrow_db:
+    doc_ref = db.collection("escrows").document(escrow_id)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
         raise HTTPException(status_code=404, detail="Escrow session not found.")
 
-    # 1. Independent SHA-256 Hashing (Separate from AI)
+    data = doc.to_dict()
+    
+    # 1. Independent SHA-256 Hashing
     contents = await file.read()
     file_hash = hashlib.sha256(contents).hexdigest()
-    escrow_manager.escrow_db[escrow_id]["receipt_hash"] = file_hash
-    escrow_manager.escrow_db[escrow_id]["logs"].append(f"FINGERPRINT GEN: {file_hash[:16]}...")
+    doc_ref.update({
+        "receipt_hash": file_hash,
+        "logs": firestore.ArrayUnion([f"FINGERPRINT GEN: {file_hash[:16]}..."])
+    })
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are supported.")
@@ -92,7 +141,7 @@ async def upload_receipt(
                 json={
                     "data": {
                         "transactionId": escrow_id,
-                        "expectedAmount": str(escrow_manager.escrow_db[escrow_id]["price"]),
+                        "expectedAmount": str(data["price"]),
                         "receiptImageBase64": base64_image
                     }
                 },
@@ -100,56 +149,54 @@ async def upload_receipt(
             )
             analysis = genkit_resp.json().get("result", {})
     except Exception as e:
-        # HACKATHON DEMO MODE: Fallback to Funded if bridge fails
-        escrow_manager.escrow_db[escrow_id]["ai_verified"] = True
+        print(f"⚠️ AI Bridge Failed: {e}")
+        # FALLBACK TO DEMO
+        doc_ref.update({"ai_verified": True})
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.FUNDED)
-        tracking_num = escrow_manager.escrow_db[escrow_id]["tracking_number"]
-        background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, tracking_num)
-        return {
-            "status": "DEMO_MODE", 
-            "message": "AI Bridge failed, falling back to Demo Mode.",
-            "ai_verdict": {"reasoning": "DEMO: AI node unreachable. Proceeding with manual escrow flow."},
-            "current_status": "Funded"
-        }
+        background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, data["tracking_number"])
+        return {"status": "DEMO_MODE", "current_status": "Funded"}
 
     is_authentic = analysis.get("is_authentic", False)
     confidence = analysis.get("confidence_score", 0)
+    reasoning = analysis.get("reasoning", "Unknown reason")
 
     if is_authentic and confidence >= 85:
-        escrow_manager.escrow_db[escrow_id]["ai_verified"] = True
-        escrow_manager.escrow_db[escrow_id]["logs"].append(f"AI VERDICT: Authentic ({confidence}%)")
+        doc_ref.update({
+            "ai_verified": True,
+            "logs": firestore.ArrayUnion([f"AI VERDICT: Authentic ({confidence}%)"])
+        })
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.FUNDED)
-        
-        tracking_num = escrow_manager.escrow_db[escrow_id]["tracking_number"]
-        background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, tracking_num)
+        background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, data["tracking_number"])
     else:
-        # DEMO MODE: Start polling anyway to show the 3,4,5 flow
-        escrow_manager.escrow_db[escrow_id]["ai_verified"] = True
-        escrow_manager.escrow_db[escrow_id]["logs"].append(f"AI VERDICT: Low Confidence ({confidence}%). Proceeding via Demo Mode.")
-        await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.FUNDED)
-        
-        tracking_num = escrow_manager.escrow_db[escrow_id]["tracking_number"]
-        background_tasks.add_task(escrow_manager.start_courier_polling, escrow_id, tracking_num)
+        # 🔥 REJECTION LOGIC
+        doc_ref.update({
+            "ai_verified": False,
+            "logs": firestore.ArrayUnion([f"🚨 AI REJECTED: {reasoning}"])
+        })
+        await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.DISPUTED)
+        # We DON'T start courier polling if rejected
 
     return {
         "escrow_id": escrow_id,
         "receipt_hash": file_hash,
         "ai_verdict": analysis,
-        "current_status": escrow_manager.escrow_db[escrow_id]["status"]
+        "current_status": "Funded"
     }
 
 @app.get("/api/escrow/status/{escrow_id}")
 async def get_status(escrow_id: str) -> Dict[str, Any]:
-    if escrow_id not in escrow_manager.escrow_db:
+    doc = db.collection("escrows").document(escrow_id).get()
+    if not doc.exists:
         raise HTTPException(status_code=404, detail="Escrow not found.")
-    return escrow_manager.escrow_db[escrow_id]
+    return doc.to_dict()
 
 @app.post("/api/escrow/dispute/{escrow_id}")
 async def raise_dispute(escrow_id: str, request: DisputeRequest) -> Dict[str, Any]:
-    if escrow_id not in escrow_manager.escrow_db:
+    doc_ref = db.collection("escrows").document(escrow_id)
+    if not doc_ref.get().exists:
         raise HTTPException(status_code=404, detail="Escrow not found.")
 
-    escrow_manager.escrow_db[escrow_id]["logs"].append("DISPUTE: Initializing AI Mediator...")
+    doc_ref.update({"logs": firestore.ArrayUnion(["DISPUTE: Initializing AI Mediator..."])})
 
     try:
         async with httpx.AsyncClient() as client:
@@ -165,26 +212,25 @@ async def raise_dispute(escrow_id: str, request: DisputeRequest) -> Dict[str, An
             )
             resolution = genkit_resp.json().get("result", {})
     except Exception as e:
-        return {"status": "BRIDGE_ERROR", "message": f"AI Mediator offline: {str(e)}"}
+        return {"status": "BRIDGE_ERROR", "message": str(e)}
 
     action = resolution.get("actionToTake")
     if action == "REFUND_BUYER":
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.DISPUTED)
-        escrow_manager.escrow_db[escrow_id]["logs"].append("MEDIATOR: Refund approved.")
+        doc_ref.update({"logs": firestore.ArrayUnion(["MEDIATOR: Refund approved."])})
     else:
         await escrow_manager.update_escrow_status(escrow_id, escrow_manager.EscrowState.RELEASED)
-        escrow_manager.escrow_db[escrow_id]["logs"].append("MEDIATOR: Payout released.")
+        doc_ref.update({"logs": firestore.ArrayUnion(["MEDIATOR: Payout released."])})
 
     return {
         "escrow_id": escrow_id,
-        "ai_resolution": resolution,
-        "new_status": escrow_manager.escrow_db[escrow_id]["status"]
+        "ai_resolution": resolution
     }
 
-# --- MOUNT UI (Must be at the very bottom) ---
 if os.path.exists("ui_build"):
     app.mount("/", StaticFiles(directory="ui_build", html=True), name="ui")
 
 if __name__ == "__main__":
     import uvicorn
+    # Use 0.0.0.0 to listen on all interfaces
     uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -1,8 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:html' as html;
 import 'checkout_screen.dart';
 import 'dispute_chat_screen.dart';
 import 'seller_dashboard.dart';
+import 'login_screen.dart';
+import '../services/demo_state.dart';
 
 class HomeNavigation extends StatefulWidget {
   const HomeNavigation({super.key});
@@ -13,33 +17,100 @@ class HomeNavigation extends StatefulWidget {
 
 class _HomeNavigationState extends State<HomeNavigation> {
   int _selectedIndex = 0;
-  final List<Widget> _pages = [
-    const SellerDashboard(),
-    const CheckoutScreen(), 
-    const DisputeChatScreen()
-  ];
+  String? _deepLinkId;
+
+  @override
+  void initState() {
+    super.initState();
+    _handleDeepLink();
+  }
+
+  void _handleDeepLink() {
+    final String? id = html.window.location.href.contains('?id=') 
+      ? Uri.parse(html.window.location.href).queryParameters['id'] 
+      : null;
+    
+    if (id != null && id.isNotEmpty) {
+      setState(() {
+        _deepLinkId = id;
+        _selectedIndex = 0;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: DemoState.demoNotifier,
+      builder: (context, isDemo, child) {
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            }
+            
+            // BYPASS LOGIC: If Demo Mode is active OR Firebase is logged in
+            if (!snapshot.hasData && !DemoState.isDemoMode) {
+              return const LoginScreen();
+            }
+
+            return _buildMainDashboard();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMainDashboard() {
+    final user = FirebaseAuth.instance.currentUser;
+    final String email = user?.email ?? "guest";
+    
+    // Check for Demo Override first
+    final String effectiveRole = DemoState.overrideRole ?? 
+                                (email == "seller@gmail.com" ? "SELLER" : 
+                                (email == "buyer@gmail.com" ? "BUYER" : "GUEST"));
+
+    final bool isSeller = effectiveRole == "SELLER";
+    final bool isBuyer = effectiveRole == "BUYER";
+
+    List<Widget> pages = [];
+    List<Map<String, dynamic>> navItems = [];
+
+    if (isSeller) {
+      pages = [const SellerDashboard()];
+      navItems = [{"icon": Icons.storefront_rounded, "label": "Seller Hub"}];
+    } else if (isBuyer) {
+      pages = [CheckoutScreen(escrowId: _deepLinkId), const DisputeChatScreen()];
+      navItems = [
+        {"icon": Icons.shield_rounded, "label": "Buyer Hub"},
+        {"icon": Icons.gavel_rounded, "label": "Disputes"},
+      ];
+    } else {
+      pages = [const SellerDashboard(), CheckoutScreen(escrowId: _deepLinkId), const DisputeChatScreen()];
+      navItems = [
+        {"icon": Icons.storefront_rounded, "label": "Seller"},
+        {"icon": Icons.shield_rounded, "label": "Buyer"},
+        {"icon": Icons.gavel_rounded, "label": "Disputes"},
+      ];
+    }
+
+    if (_selectedIndex >= pages.length) _selectedIndex = 0;
+
     return Scaffold(
-      extendBody: true, // Crucial for floating nav
+      extendBody: true,
       body: Stack(
         children: [
-          // Global Background Gradient (Light Grey)
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFF3F4F6), // Light Grey
-                  Color(0xFFE5E7EB), // Slightly darker grey for depth
-                ],
+                colors: [Color(0xFFF3F4F6), Color(0xFFE5E7EB)],
               ),
             ),
           ),
-          
-          _pages[_selectedIndex],
+          pages[_selectedIndex],
         ],
       ),
       bottomNavigationBar: Container(
@@ -60,9 +131,10 @@ class _HomeNavigationState extends State<HomeNavigation> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildNavItem(0, Icons.storefront_rounded, "Seller"),
-                    _buildNavItem(1, Icons.shield_rounded, "Buyer"),
-                    _buildNavItem(2, Icons.gavel_rounded, "Disputes"),
+                    ...navItems.asMap().entries.map((entry) {
+                      return _buildNavItem(entry.key, entry.value['icon'], entry.value['label']);
+                    }).toList(),
+                    _buildLogoutItem(),
                   ],
                 ),
               ),
@@ -73,10 +145,32 @@ class _HomeNavigationState extends State<HomeNavigation> {
     );
   }
 
+  Widget _buildLogoutItem() {
+    return GestureDetector(
+      onTap: () {
+        DemoState.isDemoMode = false;
+        DemoState.overrideRole = null;
+        DemoState.demoNotifier.value = false;
+        FirebaseAuth.instance.signOut();
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.logout, color: const Color(0xFF1D1D1B).withOpacity(0.3), size: 26),
+          const SizedBox(height: 4),
+          Text("Exit", style: TextStyle(color: const Color(0xFF1D1D1B).withOpacity(0.3), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNavItem(int index, IconData icon, String label) {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () => setState(() {
+        _selectedIndex = index;
+        if (index != 0 && DemoState.overrideRole == "BUYER") _deepLinkId = null; 
+      }),
       behavior: HitTestBehavior.opaque,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -113,4 +207,3 @@ class _HomeNavigationState extends State<HomeNavigation> {
     );
   }
 }
-

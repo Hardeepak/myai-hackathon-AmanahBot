@@ -1,8 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/home_navigation.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyAodNox6oC7tyePvrIONb3IWlww-Dt4N10",
+        appId: "1:800391755352:web:5de12f4dd512b7f6c0bc2d",
+        messagingSenderId: "800391755352",
+        projectId: "kitahack-2332b",
+        storageBucket: "kitahack-2332b.firebasestorage.app",
+        authDomain: "kitahack-2332b.firebaseapp.com",
+      ),
+    );
+  } catch (e) {
+    print("Firebase Init Error: $e");
+  }
   runApp(const AmanahBotApp());
 }
 
@@ -17,14 +33,14 @@ class AmanahBotApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF3F4F6), // Light Grey
+        scaffoldBackgroundColor: const Color(0xFFF3F4F6),
         fontFamily: GoogleFonts.inter().fontFamily,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1D1D1B),
           brightness: Brightness.light,
         ).copyWith(
-          primary: const Color(0xFF1D1D1B), // Deep Ink
-          secondary: const Color(0xFF64748B), // Slate
+          primary: const Color(0xFF1D1D1B),
+          secondary: const Color(0xFF64748B),
           surface: Colors.white.withOpacity(0.4),
           onSurface: const Color(0xFF1D1D1B),
         ),
@@ -95,4 +111,3 @@ class AmanahBotApp extends StatelessWidget {
     );
   }
 }
-
